@@ -131,7 +131,7 @@ class RecordBuffer:
 
 
 b = Painter(screen)
-f = RecordBuffer('data')
+f = RecordBuffer('data', 10)
 
 x = y = 30
 color = random_color()

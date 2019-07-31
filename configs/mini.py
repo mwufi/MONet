@@ -36,7 +36,7 @@ hparams['component_scale_foreground'] = 0.11
 hparams['beta'] = 0.5
 hparams['gamma'] = 0.25
 
-hparams['img_size'] = (64, 64)
+hparams['img_size'] = (128, 128)
 
 # optimizer
 hparams['optimizer'] = 'RMSProp'

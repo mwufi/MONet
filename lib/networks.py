@@ -166,29 +166,60 @@ class ComponentVAE(snt.AbstractModule):
     return rgb_image, reconstructed_mask
 
 
-if __name__ == '__main__':
-  import numpy as np
-  import sys, os
+class MONet(snt.AbstractModule):
 
-  sys.path.append(os.getcwd())
-  import matplotlib.pyplot as plt
-  from configs.mini import hparams
+  def __init__(self, name='monet', **kwargs):
+    super().__init__(name=name)
 
-  tf.enable_eager_execution()
+    self.kwargs = kwargs
+    self.attention_steps = self.kwargs['attention_steps']
+    self.cvae = ComponentVAE(**kwargs)
 
-  # initialize networks
-  myLittlePony = ComponentVAE(**hparams)
+  def _build(self, image, **kwargs):
+    batch_size, h, w, c = image.shape
+    scope = tf.zeros((batch_size, h, w, 1))
 
-  # make an image + scope
-  batch_size = 1
-  image = tf.random.uniform((batch_size, 64, 64, 3))
-  sd = np.zeros((1, 64, 64, 3))
-  sd[0, 0:10, 0:10, 0] = 0
-  scope = tf.convert_to_tensor(sd, dtype=tf.float32)
+    endpoints = {}
+    endpoints['attention_mask'] = []
+    endpoints['reconstruct_mask'] = []
+    endpoints['reconstruct_image'] = []
 
+    reconstructed_image = tf.zeros_like(image)
+    for i in range(self.attention_steps):
+      # feed it to our attention network
+      log_mask, scope = attention_network(image, scope, iteration=i, **self.kwargs)
+      attention_mask = tf.exp(log_mask)
+      endpoints['attention_mask'].append(attention_mask)
+
+      # feed it to the VAE
+      object_mean, mask_logits = self.cvae(tf.concat([image, log_mask], axis=3))
+      noise_scale = hparams['component_scale_background'] if i == 0 else hparams['component_scale_foreground']
+      object_image = tf.random.normal(object_mean.shape) * noise_scale + object_mean
+      reconstructed_mask = tf.sigmoid(mask_logits)
+      endpoints['reconstruct_mask'].append(reconstructed_mask)
+      endpoints['reconstruct_image'].append(object_image)
+      reconstructed_image += object_image
+
+    return reconstructed_image, endpoints
+
+
+def check_attention_masks(masks):
+  """See if the list of masks sum to 1"""
+  masks = tf.stack(masks, axis=0)
+  sum_masks = tf.reduce_sum(masks, axis=0)
+  if np.allclose(sum_masks, np.ones_like(sum_masks)):
+    print("Masks sum to 1!")
+  else:
+    print(sum_masks)
+
+
+def test_separate(image, scope, hparams):
   test_attention_network = False
   test_vae = True
   test_image = True
+
+  # initialize networks
+  myLittlePony = ComponentVAE(**hparams)
 
   # feed it to our attention network
   masks = []
@@ -223,10 +254,37 @@ if __name__ == '__main__':
       plt.title('Image component')
       plt.show()
 
-  # see if the sum = 1
-  masks = tf.stack(masks, axis=0)
-  sum_masks = tf.reduce_sum(masks, axis=0)
-  if np.allclose(sum_masks, np.ones_like(sum_masks)):
-    print("Masks sum to 1!")
-  else:
-    print(sum_masks)
+  check_attention_masks(masks)
+
+
+def test_monet(image, scope, hparams):
+  m = MONet(**hparams)
+  reconstructed_image, endpoints = m(image)
+
+  print('Reconstructed image', image.shape)
+  plt.imshow(tf.squeeze(reconstructed_image[0]))
+  plt.title('Reconstructed image')
+  plt.show()
+
+  check_attention_masks(endpoints['attention_mask'])
+
+
+if __name__ == '__main__':
+  import numpy as np
+  import sys, os
+
+  sys.path.append(os.getcwd())
+  import matplotlib.pyplot as plt
+  from configs.mini import hparams
+
+  tf.enable_eager_execution()
+
+  # make an image + scope
+  batch_size = 2
+  h, w = hparams['img_size']
+  image = tf.random.uniform((batch_size, h, w, 3))
+  sd = np.zeros((batch_size, h, w, 3))
+  sd[0, 0:10, 0:10, 0] = 0
+  scope = tf.convert_to_tensor(sd, dtype=tf.float32)
+
+  test_monet(image, scope, hparams)

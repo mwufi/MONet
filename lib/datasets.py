@@ -26,7 +26,7 @@ class BaseDataset(object):
 
 
 class ShapesDataset(BaseDataset):
-  """A dataset for reading Shapes from a TFRecord file."""
+  """A dataset for reading Shapes from a directory with many .npy files."""
 
   def provide_dataset(self, batch_size):
     pass
