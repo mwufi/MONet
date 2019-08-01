@@ -7,6 +7,7 @@ import random
 from absl import logging
 import time
 import numpy as np
+import tensorflow as tf
 
 import sys, os
 sys.path.append(os.getcwd())
@@ -103,35 +104,80 @@ def default_specs():
     'y_range': [10, 110]
   }
 
-class RecordBuffer:
-  def __init__(self, name, write_every=1024):
-    self.images = []
-    self.length = 0
-    self.write_every = write_every
-    self.written_index = 0
 
+class RecordsWriter:
+  def __init__(self, name):
     path = expand_path(name)
     if not os.path.exists(path):
       os.mkdir(path)
     self.filename = os.path.join(path, 'record_')
 
-  def save(self, image):
+  def save(self, image, **kwargs):
+    """Saves a scene"""
+    raise NotImplementedError
+
+  def close(self):
+    pass
+
+
+class NumpyBuffer(RecordsWriter):
+  """Writes a bunch of npy files"""
+  def __init__(self, name, write_every=1024):
+    super(NumpyBuffer, self).__init__(name=name)
+    self.images = []
+    self.length = 0
+    self.write_every = write_every
+    self.written_index = 0
+
+  def save(self, image, **kwargs):
     """Append to an array which flushes"""
     if self.length == self.write_every:
-      self.flush()
+      self._flush()
     else:
       self.images.append(image)
       self.length += 1
 
-  def flush(self):
+  def _flush(self):
     np.save(self.filename + str(self.written_index), np.stack(self.images))
     self.written_index += 1
     self.images = []
     self.length = 0
 
+  def close(self):
+    self._flush()
+
+
+def _int64_feature(value):
+  return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+
+def _bytes_feature(value):
+  return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+
+class TFRecordsWriter(RecordsWriter):
+  """Writes a single .tfrecord file"""
+  def __init__(self, name, **kwargs):
+    super(TFRecordsWriter, self).__init__(name)
+    self.writer = tf.io.TFRecordWriter(self.filename + '1.tfrecord')
+
+  def save(self, image, **kwargs):
+    n_objects = kwargs['n_objects']
+    example = tf.train.Example(features=tf.train.Features(
+      feature={
+        'image': _bytes_feature(image.tobytes()),
+        'n_objects': _int64_feature(n_objects)
+      }))
+    self.writer.write(example.SerializeToString())
+
+  def close(self):
+    self.writer.flush()
+    self.writer.close()
+
+
 
 b = Painter(screen)
-f = RecordBuffer('data', 10)
+f = TFRecordsWriter('data2', write_every=10)
 
 x = y = 30
 color = random_color()
@@ -152,7 +198,7 @@ for i, proportion in enumerate(hparams['data_splits']['n_objects']):
     screen.fill((0, 0, 0))
     b.draw(objects)
     imgdata = pygame.surfarray.array3d(screen)
-    f.save(imgdata)
+    f.save(imgdata, **scene_spec)
     pygame.display.flip()
 
     if x % 1e5 == 0 and x > 0:
@@ -162,4 +208,4 @@ for i, proportion in enumerate(hparams['data_splits']['n_objects']):
   logging.info(f'{total_objects}/{total_objects}\tTook {end} seconds')
 
 # Write any leftovers to file!
-f.flush()
+f.close()

@@ -9,7 +9,8 @@ lr = 8e-4
 
 # Define Config
 hparams = {}
-hparams['train_data_path'] = 'data'
+hparams['train_data_path'] = 'data2'
+hparams['dataset_name'] = 'shapes'
 
 # Attention network
 hparams['num_blocks'] = 5
