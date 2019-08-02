@@ -9,14 +9,14 @@ lr = 8e-4
 
 # Define Config
 hparams = {}
-hparams['train_data_path'] = 'data2'
+hparams['train_data_path'] = 'data'
 hparams['dataset_name'] = 'shapes'
 
 # Attention network
 hparams['num_blocks'] = 5
 hparams['filters'] = [32,32,4,4,4]
 hparams['mlp_sizes'] = [128, 128]
-hparams['attention_steps'] = 4
+hparams['attention_steps'] = 5
 
 # Component VAE
 hparams['cvae_encoder'] = {

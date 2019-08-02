@@ -185,7 +185,7 @@ class MONet(snt.AbstractModule):
       self.attention = AttentionNetwork(**self._kwargs)
       self.cvae = ComponentVAE(**self._kwargs)
 
-  def _build(self, image, **kwargs):
+  def _build(self, image):
     print('OK, building the thing')
     batch_size, h, w, c = image.shape
     log_attention_scope = tf.zeros((batch_size, h, w, 1))
@@ -207,7 +207,7 @@ class MONet(snt.AbstractModule):
 
       # feed it to the VAE
       object_mean, mask_logits = self.cvae(tf.concat([image, log_mask], axis=3))
-      noise_scale = hparams['component_scale_background'] if i == 0 else hparams['component_scale_foreground']
+      noise_scale = self._kwargs['component_scale_background'] if i == 0 else self._kwargs['component_scale_foreground']
       with tf.name_scope('obj_image'):
         object_image = tf.random.normal(object_mean.shape) * noise_scale + object_mean
         reconstructed_image += object_image
