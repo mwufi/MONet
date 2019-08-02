@@ -177,7 +177,7 @@ class TFRecordsWriter(RecordsWriter):
 
 
 b = Painter(screen)
-f = TFRecordsWriter('data2', write_every=10)
+f = TFRecordsWriter('data', write_every=10)
 
 x = y = 30
 color = random_color()
