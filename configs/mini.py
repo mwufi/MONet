@@ -42,4 +42,7 @@ hparams['img_size'] = (128, 128)
 # optimizer
 hparams['optimizer'] = 'RMSProp'
 hparams['lr'] = 1e-4
-hparams['batch_size'] = 64
+hparams['batch_size'] = 4
+
+# Training
+hparams['checkpoints_to_keep'] = 10

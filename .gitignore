@@ -2,5 +2,9 @@
 .DS_Store
 __pycache__
 
+# this can be generated with generate_data.py
 data
+# this can be generated with monet_train.py
+experiments
+# this is just me playing with pygame
 scripts/demo_pygame.py
