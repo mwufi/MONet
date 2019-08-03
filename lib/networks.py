@@ -134,6 +134,7 @@ class ComponentVAE(snt.AbstractModule):
 
   @snt.reuse_variables
   def encode(self, inputs):
+    """Turns inputs into Gaussian posterior mean+log variance"""
     outputs = snt.nets.ConvNet2D(
       output_channels=self.encoder_args['output_channels'],
       kernel_shapes=self.encoder_args['kernel_shapes'],
@@ -153,6 +154,8 @@ class ComponentVAE(snt.AbstractModule):
 
   @snt.reuse_variables
   def decode(self, latents):
+    """Turns latents into a mask and an output (3-channel RGB, 1-channel mask)
+    """
     decoder_inputs = broadcast_decoder(latents, **self.kwargs)
     outputs = snt.nets.ConvNet2D(
       output_channels=self.decoder_args['output_channels'],
@@ -172,10 +175,11 @@ class ComponentVAE(snt.AbstractModule):
     z = sample(latents)
     outputs = self.decode(z)
     rgb_image, reconstructed_mask = outputs[:,:,:,:3], outputs[:,:,:,3]
-    return rgb_image, reconstructed_mask
+    return rgb_image, reconstructed_mask, latents
 
 
 class MONet(snt.AbstractModule):
+  """A Multi-Object Network"""
 
   def __init__(self, name='monet', **kwargs):
     super().__init__(name=name)
@@ -186,14 +190,24 @@ class MONet(snt.AbstractModule):
       self.cvae = ComponentVAE(**self._kwargs)
 
   def _build(self, image):
+    """Infers the objects in the image
+
+    Returns:
+      reconstructed_image: the image from putting all the inferred objects together
+      endpoints:
+        attention_mask: a list of the attention masks returned by the attention network
+        obj_mask: a list of the reconstructed_masks by the Component VAE
+        obj_image: a list of the masked images by the Component VAE
+      """
     print('OK, building the thing')
     batch_size, h, w, c = image.shape
     log_attention_scope = tf.zeros((batch_size, h, w, 1))
 
     endpoints = {}
     endpoints['attention_mask'] = []
-    endpoints['reconstruct_mask'] = []
-    endpoints['reconstruct_image'] = []
+    endpoints['obj_mask'] = []
+    endpoints['obj_image'] = []
+    endpoints['obj_latent'] = []
 
     reconstructed_image = tf.zeros_like(image, name='image_reconstructed')
     for i in range(self._attention_steps):
@@ -206,15 +220,16 @@ class MONet(snt.AbstractModule):
       endpoints['attention_mask'].append(attention_mask)
 
       # feed it to the VAE
-      object_mean, mask_logits = self.cvae(tf.concat([image, log_mask], axis=3))
+      object_mean, mask_logits, latents = self.cvae(tf.concat([image, log_mask], axis=3))
+      reconstructed_mask = tf.sigmoid(mask_logits, name='obj_mask')
+      reconstructed_mask = tf.expand_dims(reconstructed_mask, axis=3)
       noise_scale = self._kwargs['component_scale_background'] if i == 0 else self._kwargs['component_scale_foreground']
       with tf.name_scope('obj_image'):
         object_image = tf.random.normal(object_mean.shape) * noise_scale + object_mean
-        reconstructed_image += object_image
-      reconstructed_mask = tf.sigmoid(mask_logits, name='mask_reconstructed')
-      endpoints['reconstruct_mask'].append(reconstructed_mask)
-      endpoints['reconstruct_image'].append(object_image)
-
+        reconstructed_image += tf.multiply(reconstructed_mask, object_image)
+      endpoints['obj_mask'].append(reconstructed_mask)
+      endpoints['obj_image'].append(object_image)
+      endpoints['obj_latent'].append(latents)
 
     return reconstructed_image, endpoints
 
