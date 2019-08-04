@@ -112,8 +112,8 @@ class Model(object):
 
     def _log_many(name, images):
       for i, m in enumerate(images):
-        tf.summary.image(f'step_{i}/{name}', m)
-        tf.summary.histogram(f'step_{i}/{name}', m[0])
+        tf.summary.image(f'step{i}/{name}', m)
+        tf.summary.histogram(f'step{i}/{name}', m[0])
 
     _log_many('attention_mask', self.attn_masks)
     _log_many('cvae_mask', self.obj_masks)
