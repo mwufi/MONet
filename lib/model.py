@@ -63,16 +63,21 @@ class Model(object):
     obj_latents = endpoints['obj_latent']
 
     #### Define the loss
-    reconstruction_loss = tf.compat.v1.losses.mean_squared_error(real_images, reconstructed_images)
+
+    # using MSE loss for now
+    reconstructed_images = tf.reduce_sum(tf.stack(obj_images, axis=0), axis=0)
+    reconstruction_loss = tf.compat.v1.losses.mean_squared_error(reconstructed_images, real_images)
+
+    # compute the VAE latent loss
     cvae_loss = 0
     for latents in obj_latents:
       z_mu, z_log_sigma = tf.split(latents, num_or_size_splits=2, axis=1)
       cvae_loss += tf.reduce_sum(train_util.gaussian_kl(z_mu, z_log_sigma))
-    attention_loss = 0
-    for start_mask, end_mask in zip(attn_masks, obj_masks):
-      attention_prior = tfp.distributions.Bernoulli(probs=start_mask)
-      attention_guess = tfp.distributions.Bernoulli(probs=end_mask)
-      attention_loss += tf.reduce_sum(tfp.distributions.kl_divergence(attention_prior, attention_guess))
+
+    # compute loss for VAE output masks
+    attention_prior = tfp.distributions.Categorical(probs=tf.concat(attn_masks, axis=3))
+    attention_guess = tfp.distributions.Categorical(probs=tf.nn.softmax(tf.concat(obj_masks, axis=3)))
+    attention_loss = tf.reduce_sum(tfp.distributions.kl_divergence(attention_prior, attention_guess))
     loss = reconstruction_loss \
            + config['beta'] * cvae_loss \
            + config['gamma'] * attention_loss
@@ -106,11 +111,12 @@ class Model(object):
 
     def _log_many(name, images):
       for i, m in enumerate(images):
-        tf.summary.image(f'{name}_{i}', m, max_outputs=20)
+        tf.summary.image(f'step_{i}/{name}', m)
+        tf.summary.histogram(f'step_{i}/{name}', m[0])
 
     _log_many('attention_mask', self.attn_masks)
-    _log_many('obj_mask', self.obj_masks)
-    _log_many('obj_image', self.obj_images)
+    _log_many('cvae_mask', self.obj_masks)
+    _log_many('cvae_image', self.obj_images)
 
     tf.summary.image('input_images', self.real_images)
     tf.summary.image('inferred_images', self.reconstructed_images)

@@ -162,6 +162,7 @@ class ComponentVAE(snt.AbstractModule):
       kernel_shapes=self.decoder_args['kernel_shapes'],
       strides=self.decoder_args['strides'],
       paddings=[snt.VALID],
+      activate_final=True,
       name='decoder'
     )(decoder_inputs)
     return outputs
@@ -193,8 +194,8 @@ class MONet(snt.AbstractModule):
     Returns:
       reconstructed_image: the image from putting all the inferred objects together
       endpoints:
-        attention_mask: a list of the attention masks returned by the attention network
-        obj_mask: a list of the reconstructed_masks by the Component VAE
+        attention_mask: shape (B,H,W, attention_step) tensor: attention masks returned by the attention network.
+        log_obj_mask: shape (B,H,W, attention_step) tensor: log of the masks returned by the Component VAE.
         obj_image: a list of the masked images by the Component VAE
       """
     print('OK, building the thing')
@@ -215,17 +216,15 @@ class MONet(snt.AbstractModule):
       else:
         log_mask = log_attention_scope
       attention_mask = tf.exp(log_mask, name='mask_attention')
-      endpoints['attention_mask'].append(attention_mask)
 
       # feed it to the VAE
       object_mean, mask_logits, latents = self.cvae(tf.concat([image, log_mask], axis=3))
-      reconstructed_mask = tf.sigmoid(mask_logits, name='obj_mask')
-      noise_scale = self._kwargs['component_scale_background'] if i == 0 else self._kwargs['component_scale_foreground']
-      with tf.name_scope('obj_image'):
-        object_image = tf.random.normal(object_mean.shape) * noise_scale + object_mean
-        reconstructed_image += tf.multiply(reconstructed_mask, object_image)
-      endpoints['obj_mask'].append(reconstructed_mask)
-      endpoints['obj_image'].append(object_image)
+      obj_image = tf.multiply(attention_mask, object_mean, name='obj_image')
+      reconstructed_image += obj_image
+
+      endpoints['attention_mask'].append(attention_mask)
+      endpoints['obj_mask'].append(mask_logits)
+      endpoints['obj_image'].append(obj_image)
       endpoints['obj_latent'].append(latents)
 
     return reconstructed_image, endpoints
