@@ -56,7 +56,7 @@ class Model(object):
 
     #### Define the model
     monet = networks.MONet(**config)
-    reconstructed_images, endpoints = monet(real_images)
+    endpoints = monet(real_images)
     attn_masks = endpoints['attention_mask']
     obj_masks = endpoints['obj_mask']
     obj_images = endpoints['obj_image']
@@ -65,14 +65,15 @@ class Model(object):
     #### Define the loss
 
     # using MSE loss for now
-    reconstructed_images = tf.reduce_sum(tf.stack(obj_images, axis=0), axis=0)
-    reconstruction_loss = tf.compat.v1.losses.mean_squared_error(reconstructed_images, real_images)
+    masked_images = [tf.multiply(m, i) for m,i in zip(attn_masks, obj_images)]
+    reconstructed_images = tf.reduce_sum(tf.stack(masked_images, axis=0), axis=0)
+    reconstruction_loss = train_util.reconstruction_loss(reconstructed_images, real_images)
 
     # compute the VAE latent loss
     cvae_loss = 0
     for latents in obj_latents:
       z_mu, z_log_sigma = tf.split(latents, num_or_size_splits=2, axis=1)
-      cvae_loss += tf.reduce_sum(train_util.gaussian_kl(z_mu, z_log_sigma))
+      cvae_loss += train_util.vae_latent_loss(z_mu, z_log_sigma)
 
     # compute loss for VAE output masks
     attention_prior = tfp.distributions.Categorical(probs=tf.concat(attn_masks, axis=3))

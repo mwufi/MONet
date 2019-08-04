@@ -35,10 +35,10 @@ def reconstruction_loss(x_reconstructed, x_true):
   return tf.losses.mean_squared_error(x_reconstructed, x_true)
 
 
-def gaussian_kl(z_mean, z_log_variance):
-  """Returns the KL from N(0,1)"""
+def vae_latent_loss(z_mean, z_log_variance):
+  """Returns KL(p || N(0,1))"""
   kl_div_loss = 1 + z_log_variance - tf.square(z_mean) - tf.exp(z_log_variance)
-  kl_div_loss = -0.5 * tf.reduce_sum(kl_div_loss, 1)
+  kl_div_loss = -0.5 * tf.reduce_sum(kl_div_loss)
   return kl_div_loss
 
 

@@ -216,18 +216,16 @@ class MONet(snt.AbstractModule):
       else:
         log_mask = log_attention_scope
       attention_mask = tf.exp(log_mask, name='mask_attention')
+      endpoints['attention_mask'].append(attention_mask)
 
       # feed it to the VAE
       object_mean, mask_logits, latents = self.cvae(tf.concat([image, log_mask], axis=3))
-      obj_image = tf.multiply(attention_mask, object_mean, name='obj_image')
-      reconstructed_image += obj_image
-
-      endpoints['attention_mask'].append(attention_mask)
+      object_mean = tf.nn.sigmoid(object_mean)
       endpoints['obj_mask'].append(mask_logits)
-      endpoints['obj_image'].append(obj_image)
+      endpoints['obj_image'].append(object_mean)
       endpoints['obj_latent'].append(latents)
 
-    return reconstructed_image, endpoints
+    return endpoints
 
 
 def check_attention_masks(masks):
