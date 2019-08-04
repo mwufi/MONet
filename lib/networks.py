@@ -162,8 +162,6 @@ class ComponentVAE(snt.AbstractModule):
       kernel_shapes=self.decoder_args['kernel_shapes'],
       strides=self.decoder_args['strides'],
       paddings=[snt.VALID],
-      # By default final layer activation is disabled.
-      activate_final=True,
       name='decoder'
     )(decoder_inputs)
     return outputs
@@ -174,7 +172,7 @@ class ComponentVAE(snt.AbstractModule):
     latents = self.encode(inputs)
     z = sample(latents)
     outputs = self.decode(z)
-    rgb_image, reconstructed_mask = outputs[:,:,:,:3], outputs[:,:,:,3]
+    rgb_image, reconstructed_mask = outputs[:,:,:,:3], outputs[:,:,:,3:]
     return rgb_image, reconstructed_mask, latents
 
 
@@ -222,7 +220,6 @@ class MONet(snt.AbstractModule):
       # feed it to the VAE
       object_mean, mask_logits, latents = self.cvae(tf.concat([image, log_mask], axis=3))
       reconstructed_mask = tf.sigmoid(mask_logits, name='obj_mask')
-      reconstructed_mask = tf.expand_dims(reconstructed_mask, axis=3)
       noise_scale = self._kwargs['component_scale_background'] if i == 0 else self._kwargs['component_scale_foreground']
       with tf.name_scope('obj_image'):
         object_image = tf.random.normal(object_mean.shape) * noise_scale + object_mean
