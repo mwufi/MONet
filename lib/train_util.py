@@ -7,10 +7,8 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import time
 
 from absl import logging
-from magenta.models.gansynth.lib import networks
 import numpy as np
 import tensorflow as tf
 
@@ -46,7 +44,7 @@ def reconstruction_loss(x_components, log_masks, x_true, background_scale=0.05, 
     # log(m_k * p_theta(x)) = log(m_k) + log(p_theta)
     ll = log_masks[i] + (-0.5 * log_variance - tf.square(x - x_true) / (2 * variance))
     log_likelihoods.append(ll)
-  return -tf.reduce_sum(tf.math.reduce_logsumexp(tf.stack(log_likelihoods), [1,2,3]))
+  return -tf.reduce_sum(tf.math.reduce_logsumexp(tf.stack(log_likelihoods), [3]))
 
 
 def vae_latent_loss(z_mean, z_log_variance):
