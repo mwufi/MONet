@@ -30,9 +30,23 @@ def define_train_ops(loss, **config):
     raise NotImplementedError
 
 
-def reconstruction_loss(x_reconstructed, x_true):
-  """Just use MSE because we have a gaussian decoder"""
-  return tf.losses.mean_squared_error(x_reconstructed, x_true)
+def reconstruction_loss(x_components, log_masks, x_true, background_scale=0.05, foreground_scale=0.05):
+  """
+  :param x_components: List of component images returned by VAE
+  :param log_masks: List of masks from attention network
+  :param x_true: Ground truth for reconstruction
+  :param background_scale: (optional)
+  :param foreground_scale: (optional)
+  :return: The log likelihood of x_true
+  """
+  log_likelihoods = []
+  for i, x in enumerate(x_components):
+    variance = background_scale if i == 0 else foreground_scale
+    log_variance = tf.log(variance)
+    # log(m_k * p_theta(x)) = log(m_k) + log(p_theta)
+    ll = log_masks[i] + (-0.5 * log_variance - tf.square(x - x_true) / (2 * variance))
+    log_likelihoods.append(ll)
+  return -tf.reduce_sum(tf.math.reduce_logsumexp(tf.stack(log_likelihoods), [1,2,3]))
 
 
 def vae_latent_loss(z_mean, z_log_variance):

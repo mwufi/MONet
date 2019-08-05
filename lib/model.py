@@ -58,27 +58,33 @@ class Model(object):
     monet = networks.MONet(**config)
     endpoints = monet(real_images)
     attn_masks = endpoints['attention_mask']
+    log_attn_masks = endpoints['log_attention_mask']
     obj_masks = endpoints['obj_mask']
     obj_images = endpoints['obj_image']
     obj_latents = endpoints['obj_latent']
+    masked_images = tf.stack([tf.multiply(m,i) for m,i in zip(attn_masks, obj_images)], axis=4)
+    reconstructed_images = tf.reduce_sum(masked_images, axis=4)
 
     #### Define the loss
-
-    # using MSE loss for now
-    masked_images = [tf.multiply(m, i) for m,i in zip(attn_masks, obj_images)]
-    reconstructed_images = tf.reduce_sum(tf.stack(masked_images, axis=0), axis=0)
-    reconstruction_loss = train_util.reconstruction_loss(reconstructed_images, real_images)
+    with tf.name_scope('reconstruction_loss'):
+      reconstruction_loss = train_util.reconstruction_loss(
+        obj_images, log_attn_masks, real_images,
+        background_scale=config['component_scale_background'],
+        foreground_scale=config['component_scale_foreground'])
 
     # compute the VAE latent loss
-    cvae_loss = 0
-    for latents in obj_latents:
-      z_mu, z_log_sigma = tf.split(latents, num_or_size_splits=2, axis=1)
-      cvae_loss += train_util.vae_latent_loss(z_mu, z_log_sigma)
+    with tf.name_scope('vae_loss'):
+      cvae_loss = 0
+      for latents in obj_latents:
+        z_mu, z_log_var = tf.split(latents, num_or_size_splits=2, axis=1)
+        cvae_loss += train_util.vae_latent_loss(z_mu, z_log_var)
 
     # compute loss for VAE output masks
-    attention_prior = tfp.distributions.Categorical(probs=tf.concat(attn_masks, axis=3))
-    attention_guess = tfp.distributions.Categorical(probs=tf.nn.softmax(tf.concat(obj_masks, axis=3)))
-    attention_loss = tf.reduce_sum(tfp.distributions.kl_divergence(attention_prior, attention_guess))
+    with tf.name_scope('mask_loss'):
+      attention_prior = tfp.distributions.Categorical(probs=tf.concat(attn_masks, axis=3))
+      attention_guess = tfp.distributions.Categorical(logits=tf.concat(obj_masks, axis=3))
+      attention_loss = tf.reduce_mean(tf.reduce_sum(tfp.distributions.kl_divergence(attention_prior, attention_guess), [1,2]), axis=0)
+
     loss = reconstruction_loss \
            + config['beta'] * cvae_loss \
            + config['gamma'] * attention_loss

@@ -118,8 +118,8 @@ def broadcast_decoder(z, **kwargs):
 
 
 def sample(latents):
-  z_mu, z_log_sigma = tf.split(latents, num_or_size_splits=2, axis=1)
-  z_samples = tf.random.normal(shape=z_mu.shape) * tf.exp(z_log_sigma * .5) + z_mu
+  z_mu, z_log_variance = tf.split(latents, num_or_size_splits=2, axis=1)
+  z_samples = tf.random.normal(shape=z_mu.shape) * tf.exp(z_log_variance * .5) + z_mu
   return z_samples
 
 
@@ -204,11 +204,11 @@ class MONet(snt.AbstractModule):
 
     endpoints = {}
     endpoints['attention_mask'] = []
+    endpoints['log_attention_mask'] = []
     endpoints['obj_mask'] = []
     endpoints['obj_image'] = []
     endpoints['obj_latent'] = []
 
-    reconstructed_image = tf.zeros_like(image, name='image_reconstructed')
     for i in range(self._attention_steps):
       if i < self._attention_steps - 1:
         print('Attention step', i)
@@ -217,6 +217,7 @@ class MONet(snt.AbstractModule):
         log_mask = log_attention_scope
       attention_mask = tf.exp(log_mask, name='mask_attention')
       endpoints['attention_mask'].append(attention_mask)
+      endpoints['log_attention_mask'].append(log_mask)
 
       # feed it to the VAE
       object_mean, mask_logits, latents = self.cvae(tf.concat([image, log_mask], axis=3))
