@@ -79,10 +79,11 @@ class AttentionNetwork(snt.AbstractModule):
     log_max = 1e8
 
     logits = UNet(**self._kwargs)(log_attention_scope)
+    # log(\alpha_k) and log(1-\alpha_k)
     log_alpha_k = tf.math.log_sigmoid(logits)
+    log_beta_k = tf.math.log_sigmoid(tf.ones_like(logits)-logits)
     log_mask = log_attention_scope + log_alpha_k
-    log_next_scope = log_attention_scope + tf.math.log(
-      tf.clip_by_value((1 - tf.exp(log_alpha_k)), clip_value_min=log_min, clip_value_max=log_max))
+    log_next_scope = log_attention_scope + log_beta_k
 
     return log_mask, log_next_scope
 
@@ -154,7 +155,7 @@ class ComponentVAE(snt.AbstractModule):
 
   @snt.reuse_variables
   def decode(self, latents):
-    """Turns latents into a mask and an output (3-channel RGB, 1-channel mask)
+    """Outputs logits (ie, [-inf, inf]) for the mask and object image
     """
     decoder_inputs = broadcast_decoder(latents, **self.kwargs)
     outputs = snt.nets.ConvNet2D(
@@ -162,7 +163,6 @@ class ComponentVAE(snt.AbstractModule):
       kernel_shapes=self.decoder_args['kernel_shapes'],
       strides=self.decoder_args['strides'],
       paddings=[snt.VALID],
-      activate_final=True,
       name='decoder'
     )(decoder_inputs)
     return outputs
@@ -205,6 +205,7 @@ class MONet(snt.AbstractModule):
     endpoints = {}
     endpoints['attention_mask'] = []
     endpoints['log_attention_mask'] = []
+    endpoints['mask_logits'] = []
     endpoints['obj_mask'] = []
     endpoints['obj_image'] = []
     endpoints['obj_latent'] = []
@@ -220,10 +221,10 @@ class MONet(snt.AbstractModule):
       endpoints['log_attention_mask'].append(log_mask)
 
       # feed it to the VAE
-      object_mean, mask_logits, latents = self.cvae(tf.concat([image, log_mask], axis=3))
-      object_mean = tf.nn.sigmoid(object_mean)
-      endpoints['obj_mask'].append(mask_logits)
-      endpoints['obj_image'].append(object_mean)
+      object_logits, mask_logits, latents = self.cvae(tf.concat([image, log_mask], axis=3))
+      endpoints['mask_logits'].append(mask_logits)
+      endpoints['obj_mask'].append(tf.nn.sigmoid(mask_logits))
+      endpoints['obj_image'].append(tf.nn.sigmoid(object_logits))
       endpoints['obj_latent'].append(latents)
 
     return endpoints

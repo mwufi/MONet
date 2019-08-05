@@ -59,6 +59,7 @@ class Model(object):
     endpoints = monet(real_images)
     attn_masks = endpoints['attention_mask']
     log_attn_masks = endpoints['log_attention_mask']
+    obj_mask_logits = endpoints['mask_logits']
     obj_masks = endpoints['obj_mask']
     obj_images = endpoints['obj_image']
     obj_latents = endpoints['obj_latent']
@@ -81,10 +82,11 @@ class Model(object):
 
     # compute loss for VAE output masks
     with tf.name_scope('mask_loss'):
-      attention_prior = tfp.distributions.Categorical(probs=tf.concat(attn_masks, axis=3))
-      attention_guess = tfp.distributions.Categorical(logits=tf.concat(obj_masks, axis=3))
-      attention_loss = tf.reduce_mean(tf.reduce_sum(tfp.distributions.kl_divergence(attention_prior, attention_guess), [1,2]), axis=0)
-
+      attention_loss = tf.reduce_mean(tf.compat.v1.nn.softmax_cross_entropy_with_logits_v2(
+        tf.concat(attn_masks, axis=3),
+        tf.concat(obj_mask_logits, axis=3),
+        axis=3
+      ))
     loss = reconstruction_loss \
            + config['beta'] * cvae_loss \
            + config['gamma'] * attention_loss
