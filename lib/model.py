@@ -63,8 +63,10 @@ class Model(object):
     obj_masks = endpoints['obj_mask']
     obj_images = endpoints['obj_image']
     obj_latents = endpoints['obj_latent']
-    masked_images = tf.stack([tf.multiply(m,i) for m,i in zip(attn_masks, obj_images)], axis=4)
-    reconstructed_images = tf.reduce_sum(masked_images, axis=4)
+
+    with tf.name_scope('inferred_image'):
+      masked_images = tf.stack([tf.multiply(m,i) for m,i in zip(attn_masks, obj_images)], axis=4)
+      reconstructed_images = tf.reduce_sum(masked_images, axis=4)
 
     #### Define the loss
     with tf.name_scope('reconstruction_loss'):
