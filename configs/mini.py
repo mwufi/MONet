@@ -10,6 +10,7 @@ lr = 8e-4
 # Define Config
 hparams = {}
 hparams['train_data_path'] = 'data'
+hparams['train_root_dir'] = 'my_experiments'
 hparams['dataset_name'] = 'shapes'
 
 # Attention network
