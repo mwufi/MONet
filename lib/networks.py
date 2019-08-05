@@ -74,12 +74,10 @@ class AttentionNetwork(snt.AbstractModule):
     self._kwargs = kwargs
 
   def _build(self, image, log_attention_scope):
-    x = tf.concat([image, log_attention_scope], axis=3)
-    log_min = 1e-10
-    log_max = 1e8
+    """Returns an updated scope + attention mask given the current scope
+    """
+    logits = UNet(**self._kwargs)(tf.concat([image, log_attention_scope], axis=3))
 
-    logits = UNet(**self._kwargs)(log_attention_scope)
-    # log(\alpha_k) and log(1-\alpha_k)
     log_alpha_k = tf.math.log_sigmoid(logits)
     log_beta_k = tf.math.log_sigmoid(tf.ones_like(logits)-logits)
     log_mask = log_attention_scope + log_alpha_k

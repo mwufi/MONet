@@ -82,7 +82,7 @@ class Model(object):
 
     # compute loss for VAE output masks
     with tf.name_scope('mask_loss'):
-      attention_loss = tf.reduce_mean(tf.compat.v1.nn.softmax_cross_entropy_with_logits_v2(
+      attention_loss = tf.reduce_sum(tf.compat.v1.nn.softmax_cross_entropy_with_logits_v2(
         tf.concat(attn_masks, axis=3),
         tf.concat(obj_mask_logits, axis=3),
         axis=3
