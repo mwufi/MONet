@@ -6,5 +6,7 @@ __pycache__
 data
 # this can be generated with monet_train.py
 experiments
+my_experiments
+
 # this is just me playing with pygame
 scripts/demo_pygame.py
