@@ -1,0 +1,5 @@
+pygame
+absl-py
+tensorflow-gpu
+numpy==1.16
+dm-sonnet
