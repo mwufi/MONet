@@ -179,21 +179,30 @@ class AttentionModel(Model):
 
 
   def define_train_op(self, config):
-    # these should be [0,1]
-    masks = tf.exp(tf.concat(self.masks[:3], axis=3))
-    self.total_loss = tf.losses.mean_squared_error(self.real_images, masks)
+    """
+    Should be much easier to train! (they're essentially independent)
+
+    For this second part, we're going to make the LAST THREE masks count
+    Let's see if this trains better
+    """
+    c = self.real_images.get_shape().as_list()[-1]
+    masks = tf.exp(tf.concat(self.masks[1:], axis=c))
+    reconstructed_image = tf.minimum(c * masks, 1.0)
+    self.total_loss = tf.losses.mean_squared_error(self.real_images, reconstructed_image)
     self.train_op, _ = train_util.define_train_ops(self.total_loss, **config)
-    self.reconstructed_image = masks
+    self.reconstructed_image = reconstructed_image
 
 
   def add_summaries(self):
     def _log_many(name, images):
       for i, m in enumerate(images):
-        tf.summary.image(f'step{i}/{name}', m)
-        tf.summary.histogram(f'step{i}/{name}', m[0])
+        tf.summary.image(f'{name}/step{i}', m[0:1])
+        tf.summary.histogram(f'{name}/step{i}', m[0])
 
-    _log_many('mask', self.masks)
-    _log_many('scope', self.scopes)
+    _log_many('mask', [tf.exp(x) for x in self.masks])
+    _log_many('scope', [tf.exp(x) for x in self.scopes])
+    
+    tf.summary.histogram('input', self.real_images[0])
 
     tf.summary.image('inferred_image', self.reconstructed_image)
     tf.summary.image('input images', self.real_images)
