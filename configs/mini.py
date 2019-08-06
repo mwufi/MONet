@@ -11,11 +11,11 @@ lr = 8e-4
 hparams = {}
 hparams['train_data_path'] = 'data'
 hparams['dataset_name'] = 'shapes'
-hparams['model_name'] = 'attention'
+hparams['model_name'] = 'monet'
 
 # Attention network
 hparams['attention_network'] = {
-  'output_channels': [32,32,4,4,4],
+  'output_channels': [16,16,32,32,64],
   'mlp_sizes': [128, 128]
 }
 hparams['attention_steps'] = 4
@@ -43,7 +43,7 @@ hparams['img_size'] = (128, 128)
 
 # optimizer
 hparams['optimizer'] = 'RMSProp'
-hparams['lr'] = 1e-3
+hparams['lr'] = 1e-4
 hparams['batch_size'] = 16
 
 # Training
