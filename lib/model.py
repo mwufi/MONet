@@ -179,9 +179,11 @@ class AttentionModel(Model):
 
 
   def define_train_op(self, config):
-    masks = tf.concat(self.masks[:3], axis=3)
+    # these should be [0,1]
+    masks = tf.exp(tf.concat(self.masks[:3], axis=3))
     self.total_loss = tf.losses.mean_squared_error(self.real_images, masks)
     self.train_op, _ = train_util.define_train_ops(self.total_loss, **config)
+    self.reconstructed_image = masks
 
 
   def add_summaries(self):
@@ -193,6 +195,8 @@ class AttentionModel(Model):
     _log_many('mask', self.masks)
     _log_many('scope', self.scopes)
 
+    tf.summary.image('inferred_image', self.reconstructed_image)
+    tf.summary.image('input images', self.real_images)
     tf.summary.scalar('loss', self.total_loss)
 
 registry = {
