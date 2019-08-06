@@ -58,8 +58,6 @@ class Model(object):
 
     self.build_model(config)
     self.define_train_op(config)
-    self.add_summaries()
-
 
   def build_model(self, config):
     raise NotImplementedError
@@ -130,7 +128,7 @@ class MonetModel(Model):
 
   def define_train_op(self, config):
     train_op, optimizer = train_util.define_train_ops(
-      self.total_loss, config
+      self.total_loss, **config
     )
     self.train_op = train_op
 
