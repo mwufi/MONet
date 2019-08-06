@@ -18,7 +18,7 @@ hparams['attention_network'] = {
   'output_channels': [32,32,4,4,4],
   'mlp_sizes': [128, 128]
 }
-hparams['attention_steps'] = 5
+hparams['attention_steps'] = 4
 
 # Component VAE
 hparams['cvae_encoder'] = {
@@ -43,8 +43,8 @@ hparams['img_size'] = (128, 128)
 
 # optimizer
 hparams['optimizer'] = 'RMSProp'
-hparams['lr'] = 1e-4
-hparams['batch_size'] = 4
+hparams['lr'] = 1e-3
+hparams['batch_size'] = 16
 
 # Training
 hparams['checkpoints_to_keep'] = 10

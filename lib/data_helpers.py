@@ -34,7 +34,9 @@ class DataImagesHelper(DataHelper):
   """A data helper for raw images"""
   def _map_fn(self, images):
     """Return images mapped to [0,1]"""
-    return tf.image.convert_image_dtype(images, tf.float32)
+    images = tf.image.convert_image_dtype(images, tf.float32)
+    images /= 255.0
+    return images
 
 registry = {
   'image': DataImagesHelper
