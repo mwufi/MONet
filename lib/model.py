@@ -195,6 +195,8 @@ class AttentionModel(Model):
     _log_many('mask', self.masks)
     _log_many('scope', self.scopes)
 
+    tf.summary.scalar('loss', self.total_loss)
+
 registry = {
   'monet': MonetModel,
   'attention': AttentionModel
