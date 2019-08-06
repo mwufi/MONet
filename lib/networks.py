@@ -38,8 +38,8 @@ class UpBlock(snt.AbstractModule):
 class UNet(snt.AbstractModule):
   def __init__(self, name='u_net', **kwargs):
     super(UNet, self).__init__(name=name)
-    self._numBlocks = kwargs['num_blocks']
-    self._filters = kwargs['filters']
+    self._numBlocks = len(kwargs['output_channels'])
+    self._filters = kwargs['output_channels']
     self._mlp = kwargs['mlp_sizes']
 
   def _build(self, x):
@@ -71,10 +71,10 @@ class UNet(snt.AbstractModule):
 class AttentionNetwork(snt.AbstractModule):
   def __init__(self, name='attention_network', **kwargs):
     super(AttentionNetwork, self).__init__(name=name)
-    self._kwargs = kwargs
+    self._kwargs = kwargs['attention_network']
 
   def _build(self, image, log_attention_scope):
-    """Returns an updated scope + attention mask given the current scope
+    """Returns the attention mask + scope (both maintained in log units)
     """
     logits = UNet(**self._kwargs)(tf.concat([image, log_attention_scope], axis=3))
 

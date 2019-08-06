@@ -10,13 +10,14 @@ lr = 8e-4
 # Define Config
 hparams = {}
 hparams['train_data_path'] = 'data'
-hparams['train_root_dir'] = 'my_experiments'
 hparams['dataset_name'] = 'shapes'
+hparams['model_name'] = 'attention'
 
 # Attention network
-hparams['num_blocks'] = 5
-hparams['filters'] = [32,32,4,4,4]
-hparams['mlp_sizes'] = [128, 128]
+hparams['attention_network'] = {
+  'output_channels': [32,32,4,4,4],
+  'mlp_sizes': [128, 128]
+}
 hparams['attention_steps'] = 5
 
 # Component VAE
@@ -47,3 +48,4 @@ hparams['batch_size'] = 4
 
 # Training
 hparams['checkpoints_to_keep'] = 10
+hparams['train_root_dir'] = 'experiments'

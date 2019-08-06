@@ -66,7 +66,7 @@ def run(config):
   batch_size = config['batch_size']
   tf.reset_default_graph()
   with tf.device(tf.train.replica_device_setter(config['ps_tasks'])):
-    model = lib_model.Model(batch_size, config)
+    model = lib_model.registry[config['model_name']](batch_size, config)
     model.add_summaries()
     print('Variables:')
     for v in tf.global_variables():

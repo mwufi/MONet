@@ -42,7 +42,7 @@ def set_flags(flags):
 
 
 class Model(object):
-  """MONet model"""
+  """Base model"""
 
   def __init__(self, batch_size, config):
     """ Builds a model that you can train!
@@ -54,9 +54,33 @@ class Model(object):
     data_helper = data_helpers.registry[config['data_type']](config)
     real_images = data_helper.provide_data(batch_size)
 
+    self.config = config
+    self.data_helper = data_helper
+    self.real_images = data_helper.provide_data(batch_size)
+
+    self.build_model(config)
+    self.define_train_op(config)
+    self.add_summaries()
+
+
+  def build_model(self, config):
+    raise NotImplementedError
+
+  def define_train_op(self, config):
+    """Returns a train_op"""
+    raise NotImplementedError
+
+  def add_summaries(self):
+    raise NotImplementedError
+
+
+class MonetModel(Model):
+  """Monet model"""
+
+  def build_model(self, config):
     #### Define the model
     monet = networks.MONet(**config)
-    endpoints = monet(real_images)
+    endpoints = monet(self.real_images)
     attn_masks = endpoints['attention_mask']
     log_attn_masks = endpoints['log_attention_mask']
     obj_mask_logits = endpoints['mask_logits']
@@ -71,7 +95,7 @@ class Model(object):
     #### Define the loss
     with tf.name_scope('reconstruction_loss'):
       reconstruction_loss = train_util.reconstruction_loss(
-        obj_images, log_attn_masks, real_images,
+        obj_images, log_attn_masks, self.real_images,
         background_scale=config['component_scale_background'],
         foreground_scale=config['component_scale_foreground'])
 
@@ -93,32 +117,28 @@ class Model(object):
            + config['beta'] * cvae_loss \
            + config['gamma'] * attention_loss
 
-    ##### Define train ops.
-    train_op, optimizer = train_util.define_train_ops(
-      loss, **config
-    )
-
     ##### Add variables as properties
-    self.config = config
-    self.data_helper = data_helper
-    self.real_images = real_images
     self.reconstructed_images = reconstructed_images
     self.attn_masks = attn_masks
     self.obj_masks = obj_masks
     self.obj_images = obj_images
     self.obj_latent = obj_latents
-    self.train_op = train_op
     self.attention_loss = attention_loss
     self.cvae_loss = cvae_loss
     self.reconstruction_loss = reconstruction_loss
     self.total_loss = loss
-    self.monet_infer = monet
+
+
+
+  def define_train_op(self, config):
+    train_op, optimizer = train_util.define_train_ops(
+      self.total_loss, config
+    )
+    self.train_op = train_op
 
 
   def add_summaries(self):
     """Adds model summaries."""
-    config = self.config
-    data_helper = self.data_helper
 
     def _log_many(name, images):
       for i, m in enumerate(images):
@@ -136,3 +156,46 @@ class Model(object):
     tf.summary.scalar('normal_vae_KL', self.cvae_loss)
     tf.summary.scalar('reconstruction_loss', self.reconstruction_loss)
     tf.summary.scalar('total_loss', self.total_loss)
+
+
+class AttentionModel(Model):
+  """Test the attention network"""
+
+  def build_model(self, config):
+    self.attention = networks.AttentionNetwork(**config)
+
+    # provide a fake datasource for masks
+    batch_size, h, w, c = self.real_images.shape
+    next_scope = tf.zeros((batch_size, h, w, 1))
+
+    scopes = [next_scope]
+    masks = []
+    for i in range(config['attention_steps'] - 1):
+      mask, next_scope = self.attention(self.real_images, next_scope)
+      scopes.append(next_scope)
+      masks.append(mask)
+    masks.append(next_scope)
+
+    self.masks = masks
+    self.scopes = scopes
+
+
+  def define_train_op(self, config):
+    masks = tf.concat(self.masks[:3], axis=3)
+    self.total_loss = tf.losses.mean_squared_error(self.real_images, masks)
+    self.train_op, _ = train_util.define_train_ops(self.total_loss, **config)
+
+
+  def add_summaries(self):
+    def _log_many(name, images):
+      for i, m in enumerate(images):
+        tf.summary.image(f'step{i}/{name}', m)
+        tf.summary.histogram(f'step{i}/{name}', m[0])
+
+    _log_many('mask', self.masks)
+    _log_many('scope', self.scopes)
+
+registry = {
+  'monet': MonetModel,
+  'attention': AttentionModel
+}
