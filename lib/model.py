@@ -9,8 +9,6 @@ from __future__ import division
 from __future__ import print_function
 
 from lib import data_helpers
-import tensorflow_probability as tfp
-tfd = tfp.distributions
 from lib import networks
 from lib import train_util
 import tensorflow as tf
