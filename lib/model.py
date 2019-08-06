@@ -69,6 +69,60 @@ class Model(object):
   def add_summaries(self):
     raise NotImplementedError
 
+class VAEModel(Model):
+  """The component VAE by itself"""
+  def build_model(self, config):
+    vae = networks.ComponentVAE(**config)
+
+    batch_size, h, w, c = self.real_images.shape
+    full_mask = tf.zeros((batch_size, h, w, 1))
+    object_logits, mask_logits, latents = vae(tf.concat([self.real_images, full_mask], axis=3))
+
+    self.attn_mask = [full_mask]
+    self.obj_mask = [tf.nn.sigmoid(mask_logits)]
+    self.obj_image = [tf.nn.sigmoid(object_logits)]
+    self.latents = [latents]
+
+  def define_train_op(self, config):
+    with tf.name_scope('reconstruction_loss'):
+      reconstruction_loss = train_util.reconstruction_loss(
+        self.obj_image, self.attn_mask, self.real_images,
+        background_scale=config['component_scale_background'],
+        foreground_scale=config['component_scale_foreground'])
+
+    # compute the VAE latent loss
+    with tf.name_scope('vae_loss'):
+      cvae_loss = 0
+      for latents in self.latents:
+        z_mu, z_log_var = tf.split(latents, num_or_size_splits=2, axis=1)
+        cvae_loss += train_util.vae_latent_loss(z_mu, z_log_var)
+
+    self.reconstruction_loss = reconstruction_loss
+    self.cvae_loss = cvae_loss
+    self.total_loss = reconstruction_loss + cvae_loss
+
+    train_op, optimizer = train_util.define_train_ops(
+      self.total_loss, **config
+    )
+    self.train_op = train_op
+
+  def add_summaries(self):
+    """Adds model summaries."""
+
+    def _log_many(name, images):
+      for i, m in enumerate(images):
+        tf.summary.image(f'step{i}/{name}', m)
+        tf.summary.histogram(f'step{i}/{name}', m[0])
+
+    _log_many('cvae_mask', self.obj_mask)
+    _log_many('cvae_image', self.obj_image)
+
+    tf.summary.image('input_images', self.real_images)
+
+    tf.summary.scalar('normal_vae_KL', self.cvae_loss)
+    tf.summary.scalar('reconstruction_loss', self.reconstruction_loss)
+    tf.summary.scalar('total_loss', self.total_loss)
+
 
 class MonetModel(Model):
   """Monet model"""
@@ -208,5 +262,6 @@ class AttentionModel(Model):
 
 registry = {
   'monet': MonetModel,
-  'attention': AttentionModel
+  'attention': AttentionModel,
+  'vae': VAEModel
 }
