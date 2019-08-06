@@ -103,7 +103,7 @@ def train(model, **kwargs):
       output_dir=logdir, every_n_steps=kwargs['save_summaries_num_images'])
   ]
   if kwargs['debug_hook']:
-    hooks.append(ThrowUpDebugHook)
+    hooks.append(ThrowUpDebugHook())
 
   scaffold = tf.train.Scaffold(
     saver=tf.train.Saver(
