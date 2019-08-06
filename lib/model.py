@@ -119,6 +119,8 @@ class VAEModel(Model):
 
     tf.summary.image('input_images', self.real_images)
 
+    tf.summary.histogram('input', self.real_images[0])
+
     tf.summary.scalar('normal_vae_KL', self.cvae_loss)
     tf.summary.scalar('reconstruction_loss', self.reconstruction_loss)
     tf.summary.scalar('total_loss', self.total_loss)
