@@ -129,7 +129,10 @@ class VAEModel(Model):
     super(VAEModel, self).add_summaries()
     scalars = ['reconstruction_loss', 'KL_loss']
     images = ['obj_image', 'masked_image']
+    histograms = ['latents']
 
+    for i in histograms:
+      tf.summary.histogram(i, self.endpoints[i]) 
     for i in scalars:
       tf.summary.scalar(i, self.endpoints[i])
     for i in images:
