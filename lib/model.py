@@ -113,11 +113,12 @@ class VAEModel(Model):
     KLD = -0.5 * tf.reduce_sum(1 + logvar - tf.square(mu) - tf.exp(logvar))
 
     self.endpoints = {
-      'image': object_logits,
-      'mask': mask_logits,
-      'latents': latents,
-      'obj_image': obj_image,
+      'raw_image': object_logits,
+      'raw_mask': mask_logits,
+      'image': obj_image,
+      'mask': mask,
       'masked_image': masked_image,
+      'latents': latents,
       'reconstruction_loss': reconstruction_loss,
       'KL_loss': KLD
     }
@@ -128,7 +129,7 @@ class VAEModel(Model):
   def add_summaries(self):
     super(VAEModel, self).add_summaries()
     scalars = ['reconstruction_loss', 'KL_loss']
-    images = ['obj_image', 'masked_image']
+    images = ['image', 'mask', 'masked_image']
     histograms = ['latents']
 
     for i in histograms:
