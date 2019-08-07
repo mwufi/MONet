@@ -172,7 +172,7 @@ class ComponentVAE(snt.AbstractModule):
     z = sample(latents)
     outputs = self.decode(z)
     rgb_image, reconstructed_mask = outputs[:,:,:,:3], outputs[:,:,:,3:]
-    return rgb_image, reconstructed_mask, latents
+    return rgb_image, reconstructed_mask, z
 
 
 class MONet(snt.AbstractModule):
