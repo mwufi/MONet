@@ -179,8 +179,8 @@ class MonetModel(Model):
 
     #### Most of these endpoints are LISTS - corresponding to one attention step
     masks = [tf.nn.sigmoid(x) for x in mask_logits]
-    masked_images = [tf.multiply(m, i) for m, i in zip(masks, object_images)]
     attention_masks = [tf.exp(x) for x in log_attn]
+    masked_images = [tf.multiply(m, i) for m, i in zip(attention_masks, object_images)]
     self.endpoints = {
       'attention_masks': attention_masks,
       'attention_scopes': endpoints['scope'],
