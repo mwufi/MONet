@@ -170,15 +170,15 @@ class MonetModel(Model):
         mu, logvar = tf.split(t, num_or_size_splits=2, axis=1)
         KLD += -0.5 * tf.reduce_sum(1 + logvar - tf.square(mu) - tf.exp(logvar))
       # Part 3: KL divergence between the attention masks and reconstructed mask
-      # first normalize the cvae masks with softmax
-      log_P = tf.math.log_softmax(tf.concat(mask_logits, axis=3), axis=3)
-      log_Q = tf.concat(log_attn, axis=3)
-      mask_reconstruction = tf.reduce_sum(tf.exp(log_Q) * (log_Q - log_P))
+      # in order for the vae to return valid masks, we need to sigmoid it
+      mask_reconstruction = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(
+          labels=tf.exp(tf.concat(log_attn, axis=3)),
+          logits=tf.concat(mask_logits, axis=3)))
       # Part 4: Total loss is a weighted sum
       self.total_loss = reconstruction_loss + config['beta'] * KLD + config['gamma'] * mask_reconstruction
 
     #### Most of these endpoints are LISTS - corresponding to one attention step
-    masks = tf.split(tf.exp(log_P), num_or_size_splits=len(object_images), axis=3)
+    masks = [tf.nn.sigmoid(x) for x in mask_logits]
     masked_images = [tf.multiply(m, i) for m, i in zip(masks, object_images)]
     attention_masks = [tf.exp(x) for x in log_attn]
     self.endpoints = {
