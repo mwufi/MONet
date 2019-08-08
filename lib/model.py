@@ -144,81 +144,88 @@ class MonetModel(Model):
   """Monet model"""
 
   def build_model(self, config):
-    #### Define the model
+    #### Monet needs... images!
     monet = networks.MONet(**config)
     endpoints = monet(self.real_images)
-    attn_masks = endpoints['attention_mask']
-    log_attn_masks = endpoints['log_attention_mask']
-    obj_mask_logits = endpoints['mask_logits']
-    obj_masks = endpoints['obj_mask']
-    obj_images = endpoints['obj_image']
-    obj_latents = endpoints['obj_latent']
 
-    with tf.name_scope('inferred_image'):
-      masked_images = tf.stack([tf.multiply(m,i) for m,i in zip(attn_masks, obj_images)], axis=4)
-      reconstructed_images = tf.reduce_sum(masked_images, axis=4)
+    #### Let's extract all the endpoints (except for scope)
+    log_attn = endpoints['mask']
+    object_logits = endpoints['raw_image']
+    object_images = [tf.sigmoid(o) for o in object_logits]
+    mask_logits = endpoints['raw_mask']
+    latents = endpoints['latents']
 
     #### Define the loss
-    with tf.name_scope('reconstruction_loss'):
-      reconstruction_loss = train_util.reconstruction_loss(
-        obj_images, log_attn_masks, self.real_images,
-        background_scale=config['component_scale_background'],
-        foreground_scale=config['component_scale_foreground'])
+    with tf.name_scope('loss'):
+      # Part 1. Gaussian decoder distribution p_(x| z_k) - with MASK
+      reconstruction_loss = 0
+      for log_attention, image in zip(log_attn, object_images):
+        variance = config['component_scale_background']
+        log_likelihood = (-0.5 * tf.log(variance) - tf.square(image - self.real_images) / (2 * variance))
+        rec_loss = -tf.reduce_logsumexp(log_attention + log_likelihood, axis=[1,2,3])
+        reconstruction_loss += tf.reduce_sum(rec_loss)
+      # Part 2: KL divergence between the latents and our prior N(0,1)
+      KLD = 0
+      for t in latents:
+        mu, logvar = tf.split(t, num_or_size_splits=2, axis=1)
+        KLD += -0.5 * tf.reduce_sum(1 + logvar - tf.square(mu) - tf.exp(logvar))
+      # Part 3: KL divergence between the attention masks and reconstructed mask
+      # first normalize the cvae masks with softmax
+      log_P = tf.math.log_softmax(tf.concat(mask_logits, axis=3), axis=3)
+      log_Q = tf.concat(log_attn, axis=3)
+      mask_reconstruction = tf.reduce_sum(tf.exp(log_Q) * (log_Q - log_P))
+      # Part 4: Total loss is a weighted sum
+      self.total_loss = reconstruction_loss + config['beta'] * KLD + config['gamma'] * mask_reconstruction
 
-    # compute the VAE latent loss
-    with tf.name_scope('vae_loss'):
-      cvae_loss = 0
-      for latents in obj_latents:
-        z_mu, z_log_var = tf.split(latents, num_or_size_splits=2, axis=1)
-        cvae_loss += train_util.vae_latent_loss(z_mu, z_log_var)
+    #### Most of these endpoints are LISTS - corresponding to one attention step
+    masks = tf.split(tf.exp(log_P), num_or_size_splits=len(object_images), axis=3)
+    masked_images = [tf.multiply(m, i) for m, i in zip(masks, object_images)]
+    attention_masks = [tf.exp(x) for x in log_attn]
+    self.endpoints = {
+      'attention_masks': attention_masks,
+      'attention_scopes': endpoints['scope'],
+      'mask_images': masks,
+      'object_images': object_images,
+      'masked_images': masked_images,
+      'latents': latents,
+      'reconstruction_loss': reconstruction_loss,
+      'KLD': KLD,
+      'mask_reconstruction': mask_reconstruction,
+    }
 
-    # compute loss for VAE output masks
-    with tf.name_scope('mask_loss'):
-      attention_loss = tf.reduce_sum(tf.compat.v1.nn.softmax_cross_entropy_with_logits_v2(
-        tf.concat(attn_masks, axis=3),
-        tf.concat(obj_mask_logits, axis=3),
-        axis=3
-      ))
-    loss = reconstruction_loss \
-           + config['beta'] * cvae_loss \
-           + config['gamma'] * attention_loss
-
-    ##### Add variables as properties
-    self.reconstructed_images = reconstructed_images
-    self.attn_masks = attn_masks
-    self.obj_masks = obj_masks
-    self.obj_images = obj_images
-    self.obj_latent = obj_latents
-    self.attention_loss = attention_loss
-    self.cvae_loss = cvae_loss
-    self.reconstruction_loss = reconstruction_loss
-    self.total_loss = loss
-
-    self.train_op, optimizer = train_util.define_train_ops(
-      self.total_loss, **config
-    )
-
+    #### Finally, define the train op!
+    self.train_op, optimizer = train_util.define_train_ops(self.total_loss, **config)
 
   def add_summaries(self):
     """Adds model summaries."""
     super(MonetModel, self).add_summaries()
 
     def _log_many(name, images):
+      """Display images of the same type together"""
       for i, m in enumerate(images):
-        tf.summary.image(f'step{i}/{name}', m)
-        tf.summary.histogram(f'step{i}/{name}', m[0])
+        tf.summary.image(f'{name}/step{i}', m[0:1])
+        tf.summary.histogram(f'{name}/step{i}', m[0])
 
-    _log_many('attention_mask', self.attn_masks)
-    _log_many('cvae_mask', self.obj_masks)
-    _log_many('cvae_image', self.obj_images)
+    for t in [
+      'attention_masks',
+      'attention_scopes',
+      'mask_images',
+      'object_images',
+      'masked_images'
+    ]:
+      _log_many(t, self.endpoints[t])
 
-    tf.summary.image('inferred_images', self.reconstructed_images)
+    for t in [
+      'reconstruction_loss',
+      'KLD',
+      'mask_reconstruction'
+    ]:
+      tf.summary.scalar(t, self.endpoints[t])
 
-    tf.summary.scalar('attention_KL', self.attention_loss)
-    tf.summary.scalar('normal_vae_KL', self.cvae_loss)
-    tf.summary.scalar('reconstruction_loss', self.reconstruction_loss)
-    tf.summary.scalar('total_loss', self.total_loss)
-
+    for t in [
+      'latents'
+    ]:
+      tf.summary.histogram(t, self.endpoints[t])
 
 class AttentionModel(Model):
   """Test the attention network"""

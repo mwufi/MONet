@@ -2,7 +2,7 @@ import sonnet as snt
 import tensorflow as tf
 from tensorflow.contrib.layers import instance_norm
 from tensorflow.keras.layers import ReLU, UpSampling2D, MaxPool2D
-
+from collections import defaultdict
 
 class DownBlock(snt.AbstractModule):
   def __init__(self, name='down_block', **kwargs):
@@ -192,38 +192,34 @@ class MONet(snt.AbstractModule):
     Returns:
       reconstructed_image: the image from putting all the inferred objects together
       endpoints:
-        attention_mask: shape (B,H,W, attention_step) tensor: attention masks returned by the attention network.
-        log_obj_mask: shape (B,H,W, attention_step) tensor: log of the masks returned by the Component VAE.
-        obj_image: a list of the masked images by the Component VAE
+        mask: attention masks (in log) returned by the attention network.
+        scope: scope (in log) returned by the attention network
+        raw_mask: mask logits returned by component VAE
+        raw_image: image logits returned by component VAE
+        latents: z-variables returned by component VAE
       """
     print('OK, building the thing')
+    endpoints = defaultdict(list)
+
+    #### Start out with a mask of all zeros (log of 1)
     batch_size, h, w, c = image.shape
     log_attention_scope = tf.zeros((batch_size, h, w, 1))
 
-    endpoints = {}
-    endpoints['attention_mask'] = []
-    endpoints['log_attention_mask'] = []
-    endpoints['mask_logits'] = []
-    endpoints['obj_mask'] = []
-    endpoints['obj_image'] = []
-    endpoints['obj_latent'] = []
-
+    #### Make the network
     for i in range(self._attention_steps):
       if i < self._attention_steps - 1:
         print('Attention step', i)
         log_mask, log_attention_scope = self.attention(image, log_attention_scope)
       else:
         log_mask = log_attention_scope
-      attention_mask = tf.exp(log_mask, name='mask_attention')
-      endpoints['attention_mask'].append(attention_mask)
-      endpoints['log_attention_mask'].append(log_mask)
-
-      # feed it to the VAE
       object_logits, mask_logits, latents = self.cvae(tf.concat([image, log_mask], axis=3))
-      endpoints['mask_logits'].append(mask_logits)
-      endpoints['obj_mask'].append(tf.nn.sigmoid(mask_logits))
-      endpoints['obj_image'].append(tf.nn.sigmoid(object_logits))
-      endpoints['obj_latent'].append(latents)
+
+      # Save every step for later!
+      endpoints['mask'].append(log_mask)
+      endpoints['scope'].append(log_attention_scope)
+      endpoints['raw_image'].append(object_logits)
+      endpoints['raw_mask'].append(mask_logits)
+      endpoints['latents'].append(latents)
 
     return endpoints
 
