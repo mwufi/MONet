@@ -171,7 +171,7 @@ class MonetModel(Model):
         KLD += -0.5 * tf.reduce_sum(1 + logvar - tf.square(mu) - tf.exp(logvar))
       # Part 3: KL divergence between the attention masks and reconstructed mask
       # in order for the vae to return valid masks, we need to sigmoid it
-      mask_reconstruction = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(
+      mask_reconstruction = 100 * tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
           labels=tf.exp(tf.concat(log_attn, axis=3)),
           logits=tf.concat(mask_logits, axis=3)))
       # Part 4: Total loss is a weighted sum
