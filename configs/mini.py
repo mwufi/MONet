@@ -18,7 +18,7 @@ hparams['attention_network'] = {
   'output_channels': [16,16,32,32,64],
   'mlp_sizes': [128, 128]
 }
-hparams['attention_steps'] = 4
+hparams['attention_steps'] = 6
 
 # Component VAE
 hparams['cvae_encoder'] = {
